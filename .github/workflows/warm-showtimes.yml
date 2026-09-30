@@ -10,7 +10,7 @@
 #
 # Réglages à poser une fois dans le dépôt (Settings → Secrets and variables → Actions) :
 #   onglet Secrets   : CRON_SECRET                       la même valeur que NUXT_CRON_SECRET sur Vercel
-#   onglet Variables : SITE_URL                          ex. https://cine-calendar.vercel.app
+#   onglet Variables : SITE_URL                          ex. https://cinegenda.alexis-chochina.fr
 #   onglet Secrets   : VERCEL_AUTOMATION_BYPASS_SECRET   OPTIONNEL, cf. plus bas
 #
 # Le troisième n'est nécessaire que si Vercel Deployment Protection intercepte l'URL de `SITE_URL`

@@ -23,6 +23,10 @@ const top = computed(() => {
         .slice(0, 10);
 });
 
+const heading = computed(() => props.year === null
+    ? 'Top 10 Letterboxd — pas encore vus'
+    : `Top 10 Letterboxd ${props.year} — pas encore vus`);
+
 const letterboxdUrl = (movieId) => `https://letterboxd.com/tmdb/${movieId}/`;
 const fmtRating = (v) => v == null ? '—' : v.toFixed(1);
 
@@ -32,23 +36,23 @@ const { stripEl, atStart, atEnd, nudge, updateEdges } =
 </script>
 
 <template>
-    <section class="stats-toprated card">
+    <section class="lists-toprated card">
         <div class="head flex -align-center">
-            <div class="label">Top 10 Letterboxd — pas encore vus</div>
+            <h2 class="label">{{ heading }}</h2>
             <div v-if="top.length" class="nav flex -align-center">
                 <button type="button" class="arrow -prev" aria-label="Faire défiler vers la gauche"
-                        :disabled="atStart" @click="nudge(-1)"><Svg name="chevron" /></button>
+                        :aria-disabled="atStart" @click="nudge(-1)"><Svg name="chevron" /></button>
                 <button type="button" class="arrow -next" aria-label="Faire défiler vers la droite"
-                        :disabled="atEnd" @click="nudge(1)"><Svg name="chevron" /></button>
+                        :aria-disabled="atEnd" @click="nudge(1)"><Svg name="chevron" /></button>
             </div>
         </div>
 
-        <div v-if="top.length" ref="stripEl" class="strip" @scroll.passive="updateEdges">
-            <div v-for="(f, i) in top" :key="f.id" class="cell">
+        <ul v-if="top.length" ref="stripEl" role="list" class="strip" @scroll.passive="updateEdges">
+            <li v-for="(f, i) in top" :key="f.id" class="cell">
                 <a :href="letterboxdUrl(f.movie_id)" target="_blank" rel="noopener" class="cardlink">
                     <div class="poster">
-                        <NuxtImg v-if="posterUrl(f.poster_path)" :src="posterUrl(f.poster_path)"
-                                 :alt="f.title ? `Affiche du film ${f.title}` : ''" class="img" loading="lazy" />
+                        <NuxtImg v-if="posterUrl(f.poster_path)" :src="posterUrl(f.poster_path)" alt=""
+                                 class="img" loading="lazy" />
                         <div v-else class="img -placeholder" />
                         <span class="rank">{{ i + 1 }}</span>
                         <span class="note flex -align-center" :class="{ '-fallback': f.letterboxd_rating == null }">
@@ -58,15 +62,15 @@ const { stripEl, atStart, atEnd, nudge, updateEdges } =
                     </div>
                     <div class="title">{{ f.title }}</div>
                 </a>
-            </div>
-        </div>
+            </li>
+        </ul>
 
-        <div v-else class="none">Tout est vu pour cette année.</div>
+        <p v-else class="none">Tout est vu pour cette année.</p>
     </section>
 </template>
 
 <style lang="scss" scoped>
-.stats-toprated {
+.lists-toprated {
     background: $color-surface-1;
     border: 1px solid $color-border-2;
     border-radius: 1.6rem;
@@ -79,15 +83,15 @@ const { stripEl, atStart, atEnd, nudge, updateEdges } =
         margin-bottom: 1.4rem;
 
         > .label {
-            color: $color-text-weak;
-            font: $bold 1.1rem/1 $font-body;
-            letter-spacing: .12rem;
-            text-transform: uppercase;
+            color: $color-text-quiet;
+            @include label-caps;
         }
 
         > .nav {
             margin-left: auto;
             @include stripArrows();
+
+            > .arrow { @include focusRing; }
         }
     }
 
@@ -98,7 +102,11 @@ const { stripEl, atStart, atEnd, nudge, updateEdges } =
         > .cell { width: 9.6rem; }
     }
 
-    .cardlink { display: block; }
+    .cardlink {
+        display: block;
+        border-radius: 1rem;
+        @include focusRing($offset: -2px);
+    }
 
     .poster {
         position: relative;
@@ -129,7 +137,7 @@ const { stripEl, atStart, atEnd, nudge, updateEdges } =
             border-radius: .6rem;
             background: rgba(0, 0, 0, .62);
             color: $color-text;
-            font: $bold 1.1rem/1 $font-mono;
+            @include mono-strong;
         }
 
         > .note {
@@ -143,7 +151,7 @@ const { stripEl, atStart, atEnd, nudge, updateEdges } =
             color: $color-green;
 
             > .star { width: 1.1rem; height: 1.1rem; flex: none; }
-            > .val { font: $bold 1.2rem/1 $font-mono; }
+            > .val { @include mono-strong; }
 
             // Fallback note TMDB : discrètement distingué (pas d'étoile, teinte atténuée).
             &.-fallback { color: $color-text-muted; }
@@ -153,16 +161,16 @@ const { stripEl, atStart, atEnd, nudge, updateEdges } =
     .title {
         margin-top: .6rem;
         color: $color-text-dim;
-        font: $semi-bold 1.15rem/1.25 $font-body;
         display: -webkit-box;
         -webkit-line-clamp: 2;
         -webkit-box-orient: vertical;
         overflow: hidden;
+        @include card-title;
     }
 
     > .none {
-        color: $color-text-weak;
-        font: $normal 1.25rem/1 $font-body;
+        color: $color-text-quiet;
+        @include small-text;
     }
 }
 </style>

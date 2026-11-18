@@ -39,12 +39,13 @@ export function useCalendarNav() {
         routeYear.value === undefined ? lastSelectedYear.value : routeYear.value
     )
 
-    // Noms de route Nuxt : `year-timeline` / `year-stats` / `seances` / `evenements` /
-    // `year-listes-user`. Lecture explicite plutôt qu'un `endsWith` : à cinq vues, deviner la vue
-    // par son suffixe est un piège.
+    // Noms de route Nuxt : `year-timeline` / `year-mes-listes` / `year-stats` / `seances` / `evenements` /
+    // `year-listes-user`. Lecture explicite plutôt qu'un `endsWith` : deviner la vue par son suffixe est
+    // un piège.
     const VIEW_BY_ROUTE = {
         seances: 'seances',
         evenements: 'events',
+        'year-mes-listes': 'lists',
         'year-stats': 'stats',
         'year-listes-user': 'shared',
     }
@@ -80,11 +81,11 @@ export function useCalendarNav() {
     // `date` : la journée à ouvrir, quand on clique un événement daté. Sans elle la vue s'ouvre sur
     // aujourd'hui et il faudrait retrouver le bon jour à la main — alors que la carte cliquée affichait
     // « dim. 16 août ». Omise pour un clic ordinaire depuis « Au ciné en ce moment ».
-    const goToSeances = (movieId, date = null) =>
-        navigateTo({
-            path: '/seances',
-            query: { film: String(movieId), ...(date ? { jour: String(date) } : {}) },
-        })
+    const seancesRoute = (movieId, date = null) => ({
+        path: '/seances',
+        query: { film: String(movieId), ...(date ? { jour: String(date) } : {}) },
+    })
+    const goToSeances = (movieId, date = null) => navigateTo(seancesRoute(movieId, date))
 
     const goToEvents = () => navigateTo('/evenements')
 
@@ -92,13 +93,14 @@ export function useCalendarNav() {
     const isCity = computed(() => isYearlessView(viewMode.value))
     const isLibrary = computed(() => !isCity.value)
 
-    // Le chemin d'une vue de la liste, pour une année donnée. ⚠️ `'shared'` n'est **pas** un segment
-    // d'URL : la route est `/[year]/listes/[user]`, donc `/2024/shared` n'existe pas. C'est ici, et
+    // Le chemin d'une vue de la liste. ⚠️ Une vue n'est pas toujours son segment d'URL : `shared` vit
+    // sous `/[year]/listes/[user]`, `lists` sous `/[year]/mes-listes` (`listes` est pris). C'est ici, et
     // nulle part ailleurs, qu'une vue redevient un chemin.
+    const LIBRARY_SEGMENTS = { shared: 'timeline', lists: 'mes-listes' }
     const libraryPath = (year, mode = viewMode.value, slug = sharedSlug.value) =>
         mode === 'shared' && slug
             ? `/${yearToSlug(year)}/listes/${slug}`
-            : `/${yearToSlug(year)}/${mode === 'shared' ? 'timeline' : mode}`
+            : `/${yearToSlug(year)}/${LIBRARY_SEGMENTS[mode] ?? mode}`
 
     const selectYear = async (year) => {
         clearHighlight()
@@ -153,6 +155,7 @@ export function useCalendarNav() {
         yearOfMovie,
         goToMovie,
         goToSeances,
+        seancesRoute,
         goToEvents,
         selectYear,
         selectView,

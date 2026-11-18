@@ -12,6 +12,7 @@ export default defineNuxtRouteMiddleware((to) => {
         return navigateTo(`/${currentYear}/listes/${to.params.user}`, { replace: true })
     }
 
-    const view = name.endsWith('stats') ? 'stats' : 'timeline'
-    return navigateTo(`/${currentYear}/${view}`, { replace: true })
+    const SEGMENT_BY_ROUTE = { 'year-stats': 'stats', 'year-mes-listes': 'mes-listes' }
+    const segment = SEGMENT_BY_ROUTE[name] ?? 'timeline'
+    return navigateTo(`/${currentYear}/${segment}`, { replace: true })
 })

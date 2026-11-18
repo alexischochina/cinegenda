@@ -44,9 +44,9 @@ const dayLabel = (day) => {
 
         <div class="nav">
             <button type="button" class="arrow -prev" aria-label="Jours précédents"
-                    :disabled="atStart" @click="nudge(-1)"><Svg name="chevron" aria-hidden="true" /></button>
+                    :aria-disabled="atStart" @click="nudge(-1)"><Svg name="chevron" aria-hidden="true" /></button>
             <button type="button" class="arrow -next" aria-label="Jours suivants"
-                    :disabled="atEnd" @click="nudge(1)"><Svg name="chevron" aria-hidden="true" /></button>
+                    :aria-disabled="atEnd" @click="nudge(1)"><Svg name="chevron" aria-hidden="true" /></button>
         </div>
     </div>
 </template>

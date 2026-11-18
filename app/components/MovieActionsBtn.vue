@@ -1,7 +1,7 @@
 <script setup>
 import { onClickOutside } from '@vueuse/core';
 
-const emits = defineEmits(['movie-deleted', 'release-date-updated', 'toggle-catchup']);
+const emits = defineEmits(['movie-deleted', 'release-date-updated', 'toggle-catchup', 'toggle-prio']);
 
 const props = defineProps({
     id: {
@@ -20,18 +20,39 @@ const props = defineProps({
         type: Boolean,
         default: false,
     },
+    state: {
+        type: String,
+        default: 'unseen',
+    },
+    media: {
+        type: String,
+        default: 'cinema',
+    },
+    prio: {
+        type: Boolean,
+        default: false,
+    },
 });
 
 // « À rattraper » ne concerne que les films déjà sortis (date effective passée).
 const isReleased = computed(() => !!props.releaseDate && props.releaseDate <= today());
 
+const isInTheaters = computed(() => props.state === 'inTheaters');
+const showCatchup = computed(() => isReleased.value && (props.catchup || !isInTheaters.value));
+
+const canAdd = computed(() => canAddToPrio({ media: props.media, state: props.state, prio: props.prio }));
+const showPrio = computed(() => props.prio || canAdd.value);
+
 const isOpen = ref(false);
 const view = ref('menu');
 const container = ref(null);
+const trigger = ref(null);
 
-const close = () => {
+const close = ({ restoreFocus = false } = {}) => {
+    const wasOpen = isOpen.value;
     isOpen.value = false;
     view.value = 'menu';
+    if (wasOpen && restoreFocus) trigger.value?.focus();
 }
 
 const toggle = () => {
@@ -54,32 +75,46 @@ const onReleaseDateUpdated = (payload) => {
 
 const onToggleCatchup = () => {
     emits('toggle-catchup', props.id, !props.catchup);
-    close();
+    close({ restoreFocus: true });
 }
 
-onClickOutside(container, close);
+const openDate = () => {
+    view.value = 'date';
+    nextTick(() => container.value?.querySelector('input[type="date"]')?.focus());
+}
+
+const onTogglePrio = () => {
+    emits('toggle-prio', props.id, !props.prio);
+    close({ restoreFocus: true });
+}
+
+onClickOutside(container, () => close());
 </script>
 
 <template>
-    <div class="actions-btn-wrapper" ref="container" @keydown.escape="close">
-        <button class="actions-btn" :class="{ '-active': !!manualReleaseDate }" @click.stop="toggle"
+    <div class="actions-btn-wrapper" ref="container" @keydown.escape="close({ restoreFocus: true })">
+        <button ref="trigger" class="actions-btn" :class="{ '-active': !!manualReleaseDate }" @click.stop="toggle"
                 aria-label="Actions du film" :aria-expanded="isOpen">
             <Svg name="more"/>
         </button>
         <div v-if="isOpen" class="popover" @click.stop>
             <template v-if="view === 'menu'">
-                <button class="menu-item" @click="view = 'date'">
+                <button v-if="showPrio" type="button" class="menu-item -prio" :class="{ '-on': prio }" @click="onTogglePrio">
+                    <span class="ico-box"><Svg name="star"/></span>
+                    <span class="label">{{ prio ? 'Retirer des prios' : 'Ajouter aux prios' }}</span>
+                </button>
+                <button class="menu-item" @click="openDate">
                     <span class="ico-box"><Svg name="calendar"/></span>
                     <span class="label">Modifier la date</span>
                 </button>
-                <button v-if="isReleased" class="menu-item" :class="{ '-active': catchup }" @click="onToggleCatchup">
+                <button v-if="showCatchup" class="menu-item" :class="{ '-active': catchup }" @click="onToggleCatchup">
                     <span class="ico-box"><Svg name="list"/></span>
                     <span class="label">{{ catchup ? 'Retirer de la liste à rattraper' : 'Ajouter à la liste à rattraper' }}</span>
                 </button>
                 <DeleteMovieAction :id="id" @movie-deleted="onDeleted"/>
             </template>
             <EditDateAction v-else-if="view === 'date'" :id="id" :manual-release-date="manualReleaseDate"
-                            @release-date-updated="onReleaseDateUpdated" @done="close"/>
+                            @release-date-updated="onReleaseDateUpdated" @done="close({ restoreFocus: true })"/>
         </div>
     </div>
 </template>
@@ -136,7 +171,10 @@ onClickOutside(container, close);
     box-shadow: 0 18px 44px rgba(0, 0, 0, .6);
     min-width: 19rem;
     transform-origin: top right;
-    animation: pop .14s ease;
+
+    @media (prefers-reduced-motion: no-preference) {
+        animation: pop .14s ease;
+    }
 }
 
 .menu-item {
@@ -170,6 +208,12 @@ onClickOutside(container, close);
         color: $color-primary-light;
 
         > .ico-box { color: $color-primary-light; }
+    }
+
+    &.-prio {
+        > .ico-box { color: $color-prio; }
+
+        &.-on > .ico-box { background: rgba($color-prio, .14); }
     }
 
     @media (hover: hover) {

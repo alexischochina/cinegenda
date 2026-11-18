@@ -22,14 +22,15 @@ npm run dev       # Start dev server at http://localhost:3000
 npm run build     # Build for production
 npm run generate  # Generate static site
 npm run preview   # Preview production build
-npm test          # Règles pures des vues Séances / Événements (scripts/test-seances-rules.mjs)
+npm test          # Règles pures des vues Séances / Événements / Listes (scripts/test-seances-rules.mjs)
 ```
 
 **Tests** — `npm test` couvre les règles **pures** des vues Séances et Événements : filtres et
 regroupements, semaine ciné, report des salles disparues, vocabulaire d'événement, connecteurs
 d'exploitant, verdicts « en salle » — plus la lecture des fiches Letterboxd (note et liens
-réalisateurs), le slug et le « ce qu'il a que je n'ai pas » des listes partagées, et le regroupement
-année → mois → jour commun aux deux timelines. Aucun framework — un script Node qui sort en code 1 au premier échec. Les composables (état, réseau, écritures) ne sont **pas** couverts : c'est là que se sont logés
+réalisateurs), le slug et le « ce qu'il a que je n'ai pas » des listes partagées, le regroupement
+année → mois → jour commun aux deux timelines, et les règles de Prio ciné (qui entre, l'ordre, les
+transferts vers et depuis À rattraper). Aucun framework — un script Node qui sort en code 1 au premier échec. Les composables (état, réseau, écritures) ne sont **pas** couverts : c'est là que se sont logés
 les défauts trouvés en revue, à garder en tête avant d'y toucher.
 
 ⚠️ Ne pas lancer `npm run build` pendant qu'un serveur de dev tourne : il écrit dans `.nuxt` au format
@@ -64,6 +65,9 @@ devine pas — homonymes suffixés, orthographes divergentes : il est lu sur la 
 (`director[].sameAs` du JSON-LD, page déjà chargée pour la note — `shared/utils/letterboxdFilm.js`) et
 persisté dans `calendar.letterboxd_directors`. Le slug deviné de `app/utils/movieHelpers.js` est un
 repli, pas une source.
+- Listes personnelles, sur la même ligne : `catchup` / `catchup_year` / `catchup_at` (À rattraper,
+  par année) et `prio` (Prio ciné, toutes années — `2611181315`). Les deux s'excluent et s'échangent
+  des films d'elles-mêmes, cf. **Onglet Listes** plus bas.
 - `manual_release_date` (user override) always wins over the stored `release_date`. `useMovieCalendar` keeps the raw stored TMDB date under `_tmdbReleaseDate` so clearing an override falls back correctly.
 - One-shot backfill of pre-existing rows: `scripts/backfill-movies.mjs` (throttled to 8 concurrent via `app/utils/promisePool.js`). Migration SQL in `_ressources/sql/`.
 - Pinia store at `app/stores/movies.js` manages filters / movies list state.
@@ -113,6 +117,19 @@ repli, pas une source.
   `npm test`.
 - Mode d'emploi complet et pièges documentés : `_ressources/README-listes-partagees.md`.
 
+**Onglet Listes & Prio ciné :**
+- `/[year]/mes-listes` (`listes` est pris par les listes partagées) : Prio ciné (films en salle à voir
+  en premier, toutes années), Top 10 Letterboxd et À rattraper (année choisie), ces deux-là déplacés
+  depuis Stats.
+- Règles pures dans `app/utils/prioCine.js` ; écritures dans `useMovieCalendar` (`setPrio`,
+  `setState`, `setMedia`, `reconcilePrio`). ⚠️ `MovieListItem` n'écrit plus l'état ni le média en
+  base : il émet, la page appelle le composable, et `movies` suit.
+- ⚠️ Prio → À rattraper est un **invariant** (`reconcilePrio`, à chaque chargement et après chaque
+  synchro) ; À rattraper → prio est un **événement** qui exige une preuve de séances : seule
+  `syncInTheaters` l'applique (`promoteReturnedToPrio`), **jamais** `applyAutoInTheaters`, dont la
+  promotion « en salle » est optimiste.
+- Mode d'emploi complet et pièges documentés : `_ressources/README-listes-prio-cine.md`.
+
 **Écrans d'authentification (login / register / pending / mot de passe oublié) :**
 - Cinq écrans sur un layout commun (`app/layouts/auth.vue`) + `app/components/auth/`. Aucun ne porte
   le middleware `auth` : on y arrive sans session utilisable.
@@ -129,13 +146,14 @@ repli, pas une source.
 
 **Key pages:**
 - `/` — Calendar home, movies grouped by year → month → day
+- `/[year]/mes-listes` — Prio ciné, Top 10 Letterboxd, À rattraper
 - `/[year]/listes/[user]` — La timeline d'un autre compte, en lecture seule
 - `/seances` — Séances parisiennes des films de la liste
 - `/evenements` — Avant-premières et séances spéciales de la semaine
 - `/search` — TMDB movie search with debounce
 - `/movies/[id]` — Movie detail page
 
-**Components:** `MovieListItem.vue` (per-movie row with media type + watch state dropdowns), `SelectBtn.vue` (shared dropdown), `nav/Header.vue` (bottom-floating nav with add-movie form), `Svg.vue` (SVG icon wrapper).
+**Components:** `MovieListItem.vue` (per-movie row with media type + watch state dropdowns — it emits, the page writes), `SelectBtn.vue` (shared dropdown), `nav/Header.vue` (bottom-floating nav with add-movie form), `Svg.vue` (SVG icon wrapper).
 
 ## Environment Variables
 

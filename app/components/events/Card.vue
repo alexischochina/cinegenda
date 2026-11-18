@@ -113,7 +113,7 @@ const releaseLabel = (movie) => {
     return upcoming ? `Sortie le ${when}` : `Sorti le ${when}`;
 };
 
-const rowLabel = (row) => `Voir les séances de ${row.movie.title} le ${dayLabel(row.entry.date)}`;
+const rowLabel = (row) => `Voir les séances de ${row.movie.title}${row.movie.prio ? ', en prio ciné,' : ''} le ${dayLabel(row.entry.date)}`;
 </script>
 
 <template>
@@ -130,7 +130,7 @@ const rowLabel = (row) => `Voir les séances de ${row.movie.title} le ${dayLabel
                 <span v-else class="ico" aria-hidden="true"><Svg name="star" /></span>
 
                 <span class="infos">
-                    <span class="title">{{ title }}</span>
+                    <span class="title"><PrioStar v-if="mode === 'film' && bucket.movie.prio" class="prio" />{{ title }}</span>
                     <span class="sub">
                         {{ subtitle }}
                         <!-- Le décompte est du texte visible ; les libellés partent dans le `title`
@@ -168,7 +168,7 @@ const rowLabel = (row) => `Voir les séances de ${row.movie.title} le ${dayLabel
                 <span class="detail">
                     <template v-if="mode === 'day'">
                         <button class="name" type="button" :aria-label="rowLabel(row)"
-                                @click="emit('select', row.movie, row.entry.date)">{{ row.movie.title }}</button>
+                                @click="emit('select', row.movie, row.entry.date)"><PrioStar v-if="row.movie.prio" class="prio" />{{ row.movie.title }}</button>
                         <span v-if="releaseLabel(row.movie)" class="release">{{ releaseLabel(row.movie) }}</span>
                     </template>
 
@@ -288,6 +288,13 @@ const rowLabel = (row) => `Voir les séances de ${row.movie.title} le ${dayLabel
                     white-space: nowrap;
                     overflow: hidden;
                     text-overflow: ellipsis;
+
+                    > .prio {
+                        width: 1.3rem;
+                        height: 1.3rem;
+                        margin-right: .8rem;
+                        vertical-align: -.1rem;
+                    }
                 }
 
                 > .sub {
@@ -387,6 +394,11 @@ const rowLabel = (row) => `Voir les séances de ${row.movie.title} le ${dayLabel
                     color: $color-text-body;
                     font: $semi-bold 1.3rem/1.2 $font-body;
                     cursor: pointer;
+
+                    > .prio {
+                        margin-right: .8rem;
+                        vertical-align: -.1rem;
+                    }
 
                     @media (hover: hover) {
                         &:hover { color: $color-event-light; }

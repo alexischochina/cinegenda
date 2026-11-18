@@ -4,12 +4,10 @@
 definePageMeta({ key: 'stats', middleware: ['auth', 'valid-year'] })
 useHead({ title: 'Statistiques' })
 
-const { movies, setCatchup } = useMovieCalendar()
-const { selectedYear, goToMovie } = useCalendarNav()
-const { onAddCatchupMovie } = useCatchupFlow()
+const { movies } = useMovieCalendar()
+const { selectedYear } = useCalendarNav()
 </script>
 
 <template>
-    <StatsView :movies="movies" :year="selectedYear"
-               @go-to-movie="(id) => goToMovie(id)" @toggle-catchup="setCatchup" @add-catchup-movie="onAddCatchupMovie" />
+    <StatsView :movies="movies" :year="selectedYear" />
 </template>

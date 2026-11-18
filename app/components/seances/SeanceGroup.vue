@@ -122,7 +122,7 @@ const UNCONFIRMED_HINT = 'Horaires vus lors d\'un relevé précédent : la sourc
 
                 <span class="infos">
                     <span class="title">
-                        {{ title }}
+                        <PrioStar v-if="mode === 'film' && bucket.movie.prio" class="prio" />{{ title }}
                         <span v-if="mode === 'cinema' && bucket.cinema.unconfirmedSince" class="unconfirmed"
                               :title="UNCONFIRMED_HINT">non confirmé<span class="sr">. {{ UNCONFIRMED_HINT }}</span></span>
                     </span>
@@ -175,7 +175,7 @@ const UNCONFIRMED_HINT = 'Horaires vus lors d\'un relevé précédent : la sourc
                 </template>
 
                 <span class="detail">
-                    <span v-if="mode === 'cinema'" class="name">{{ entry.movie.title }}</span>
+                    <span v-if="mode === 'cinema'" class="name"><PrioStar v-if="entry.movie.prio" class="prio" />{{ entry.movie.title }}</span>
                     <span class="times">
                         <SeancesTimeChip v-for="showtime in entry.showtimes" :key="showtime.startsAt + showtime.version"
                                          :showtime="showtime" />
@@ -349,6 +349,13 @@ const UNCONFIRMED_HINT = 'Horaires vus lors d\'un relevé précédent : la sourc
                     overflow: hidden;
                     text-overflow: ellipsis;
 
+                    > .prio {
+                        width: 1.3rem;
+                        height: 1.3rem;
+                        margin-right: .8rem;
+                        vertical-align: -.1rem;
+                    }
+
                     > .unconfirmed { @include unconfirmedTag; }
                 }
 
@@ -442,6 +449,11 @@ const UNCONFIRMED_HINT = 'Horaires vus lors d\'un relevé précédent : la sourc
                     margin-bottom: .7rem;
                     color: $color-text-body;
                     font: $semi-bold 1.3rem/1.2 $font-body;
+
+                    > .prio {
+                        margin-right: .8rem;
+                        vertical-align: -.1rem;
+                    }
                 }
 
                 > .times {

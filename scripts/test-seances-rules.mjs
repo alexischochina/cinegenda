@@ -8,7 +8,7 @@
 // un film qui reste « en salle » de trop, un mercredi mal calculé ne lèvent aucune exception, ils
 // affichent simplement quelque chose de faux.
 //
-// Onze familles, toutes importées depuis le code réel (aucune copie) :
+// Dix-neuf familles, toutes importées depuis le code réel (aucune copie) :
 //   1. `carryOverMissing`     — report des salles disparues (server/utils/showtimesFreshness.js)
 //   2. `cineWeek`             — semaine ciné partagée app/serveur/scripts (shared/utils/cineWeek.js)
 //   3. `seancesGrouping`      — filtres, tri, regroupements (app/utils/seancesGrouping.js)
@@ -27,6 +27,7 @@
 //  16. `moviesGrouping`     — le regroupement année → mois → jour des deux timelines (app/utils/moviesGrouping.js)
 //  17. `userIdOf`           — l'identifiant du compte connecté, `sub` et non `id` (app/utils/currentUser.js)
 //  18. `isCompleteDateInput` — quelle saisie de date est enregistrable (app/utils/movieDate.js)
+//  19. `prioCine`           — qui entre en Prio ciné, dans quel ordre, où il va en sortant (app/utils/prioCine.js)
 //
 // Sort en code 1 au premier échec, pour être branchable sur un hook ou une CI.
 
@@ -68,7 +69,8 @@ import { parseLetterboxdFilm, isLetterboxdDirectorUrl } from '../shared/utils/le
 import { bestSearchMatch, closestToToday } from '../app/utils/movieSearch.js';
 import { matchesFilters, blockingFilters } from '../app/utils/movieFilters.js';
 import { isFullyVisible } from '../app/utils/viewport.js';
-import { isCompleteDateInput } from '../app/utils/movieDate.js';
+import { isCompleteDateInput, dayMonthShort } from '../app/utils/movieDate.js';
+import { canAddToPrio, sortPrio, prioCandidates, prioExitPatch, returnToTheatersPatch, prioAnnouncement, prioDateLabel } from '../app/utils/prioCine.js';
 
 // --- Auto-imports simulés ------------------------------------------------------------------------
 //
@@ -1564,6 +1566,109 @@ console.log('\n\x1b[1misCompleteDateInput — n\'enregistrer qu\'une année fini
     t('null → refusé', isCompleteDateInput(null), false);
     t('undefined → refusé', isCompleteDateInput(undefined), false);
     t('format libre → refusé', isCompleteDateInput('11/07/1988'), false);
+}
+
+// --- 19. Prio ciné -----------------------------------------------------------------------------
+console.log('\n\x1b[1mprioCine — qui entre, dans quel ordre, et où il va en sortant\x1b[0m');
+{
+    const NOW = '2026-11-18T12:00:00.000Z';
+    const ctx = { now: NOW, currentYear: 2026 };
+    const film = (extra = {}) => ({
+        id: 1, title: 'Film', media: 'cinema', state: 'inTheaters',
+        prio: false, catchup: false, release_date: '2026-11-04', ...extra,
+    });
+    const titles = (list) => list.map(m => m.title);
+
+    t('en salle, cinéma, pas encore prio → ajoutable', canAddToPrio(film()), true);
+    t('déjà en prio → non', canAddToPrio(film({ prio: true })), false);
+    t('envie de voir (aucune séance) → non', canAddToPrio(film({ state: 'unseen' })), false);
+    t('à télécharger → non', canAddToPrio(film({ state: 'downloadAvailable' })), false);
+    t('vu → non', canAddToPrio(film({ state: 'seen' })), false);
+    t('streaming → non', canAddToPrio(film({ media: 'netflix' })), false);
+    t('null → non, sans throw', canAddToPrio(null), false);
+
+    const beta = film({ id: 1, title: 'Bêta', release_date: '2026-10-01' });
+    const alpha = film({ id: 2, title: 'Alpha', release_date: '2026-10-01' });
+    const gamma = film({ id: 3, title: 'Gamma', release_date: '2026-09-15' });
+    const undated = film({ id: 4, title: 'Aaa sans date', release_date: null });
+    t('date croissante, sans date en fin, égalité → titre',
+        titles(sortPrio([undated, beta, alpha, gamma])), ['Gamma', 'Alpha', 'Bêta', 'Aaa sans date']);
+    t('date effective lue, pas la date TMDB d\'origine',
+        titles(sortPrio([
+            film({ id: 5, title: 'Avancé à la main', release_date: '2026-12-01', _tmdbReleaseDate: '2026-08-01' }),
+            gamma,
+        ])), ['Gamma', 'Avancé à la main']);
+    t('date illisible rangée avec les sans date',
+        titles(sortPrio([film({ id: 6, title: 'Illisible', release_date: 'n/a' }), gamma])), ['Gamma', 'Illisible']);
+    const input = [beta, gamma];
+    sortPrio(input);
+    t('la liste reçue n\'est pas réordonnée', titles(input), ['Bêta', 'Gamma']);
+    t('liste absente → []', sortPrio(undefined), []);
+
+    const mine = [
+        film({ id: 10, title: 'L\'Été brûlant', release_date: '2026-10-01' }),
+        film({ id: 11, title: 'Le Cœur battant', release_date: '2026-09-01' }),
+        film({ id: 12, title: 'Spider-Man', release_date: '2026-11-01' }),
+        film({ id: 13, title: 'Été vu', state: 'seen' }),
+        film({ id: 14, title: 'Été sur Netflix', media: 'netflix' }),
+        film({ id: 15, title: 'Été déjà prio', prio: true }),
+        film({ id: 16, title: 'Été à venir', state: 'unseen' }),
+    ];
+    t('sans recherche → mes films en salle seulement, triés',
+        titles(prioCandidates(mine, '')), ['Le Cœur battant', 'L\'Été brûlant', 'Spider-Man']);
+    t('vu, streaming, déjà prio, sans séance → jamais proposés',
+        titles(prioCandidates(mine, 'ete')), ['L\'Été brûlant']);
+    t('majuscules et accents tapés', titles(prioCandidates(mine, 'ÉTÉ')), ['L\'Été brûlant']);
+    t('« oe » tapé pour « œ »', titles(prioCandidates(mine, 'coeur')), ['Le Cœur battant']);
+    t('ponctuation neutralisée', titles(prioCandidates(mine, 'spider man')), ['Spider-Man']);
+    t('terme blanc → aucun filtre', prioCandidates(mine, '   ').length, 3);
+    t('terme absent → aucun filtre', prioCandidates(mine).length, 3);
+    t('terme inconnu → []', prioCandidates(mine, 'zzz'), []);
+    t('titre absent → ignoré sans throw', prioCandidates([film({ title: undefined })], 'a'), []);
+
+    t('pas en prio → rien', prioExitPatch(film(), ctx), null);
+    t('prio toujours en salle → rien', prioExitPatch(film({ prio: true }), ctx), null);
+    t('prio vue → quitte les prios, pas vers À rattraper',
+        prioExitPatch(film({ prio: true, state: 'seen' }), ctx), { prio: false });
+    t('prio passée en streaming → quitte les prios seulement',
+        prioExitPatch(film({ prio: true, media: 'netflix' }), ctx), { prio: false });
+    t('prio sans séances → À rattraper, dans son année de sortie',
+        prioExitPatch(film({ prio: true, state: 'unseen', release_date: '2025-12-10' }), ctx),
+        { prio: false, catchup: true, catchup_at: NOW, catchup_year: 2025 });
+    t('prio « à télécharger » → À rattraper aussi',
+        prioExitPatch(film({ prio: true, state: 'downloadAvailable' }), ctx),
+        { prio: false, catchup: true, catchup_at: NOW, catchup_year: 2026 });
+    t('prio sans séances ni date → année courante, pas 1970',
+        prioExitPatch(film({ prio: true, state: 'unseen', release_date: null }), ctx),
+        { prio: false, catchup: true, catchup_at: NOW, catchup_year: 2026 });
+    t('prio sans séances, déjà dans À rattraper → quitte seulement les prios',
+        prioExitPatch(film({ prio: true, state: 'unseen', catchup: true }), ctx), { prio: false });
+    t('null → rien, sans throw', prioExitPatch(null, ctx), null);
+
+    t('À rattraper + séances retrouvées → prio, hors d\'À rattraper',
+        returnToTheatersPatch(film({ catchup: true })), { catchup: false, catchup_at: null, prio: true });
+    t('pas dans À rattraper → rien', returnToTheatersPatch(film()), null);
+    t('À rattraper sans séances → rien', returnToTheatersPatch(film({ catchup: true, state: 'unseen' })), null);
+    t('À rattraper, vu → rien', returnToTheatersPatch(film({ catchup: true, state: 'seen' })), null);
+    t('À rattraper en streaming → rien', returnToTheatersPatch(film({ catchup: true, media: 'netflix' })), null);
+
+    const back = film({ catchup: true });
+    t('après la ressortie, l\'invariant prio est satisfait',
+        prioExitPatch({ ...back, ...returnToTheatersPatch(back) }, ctx), null);
+    const left = film({ prio: true, state: 'unseen' });
+    t('après le transfert vers À rattraper, pas de retour sans séances',
+        returnToTheatersPatch({ ...left, ...prioExitPatch(left, ctx) }), null);
+
+    t('date de l\'année en cours → jour et mois', prioDateLabel(film({ release_date: '2026-11-04' }), 2026), '04 NOV');
+    t('autre année → l\'année en plus', prioDateLabel(film({ release_date: '2025-03-12' }), 2026), '12 MAR 2025');
+    t('accents des mois conservés', prioDateLabel(film({ release_date: '2026-08-01' }), 2026), '01 AOÛ');
+    t('sans date', prioDateLabel(film({ release_date: null }), 2026), 'Sans date');
+    t('date illisible → sans date', prioDateLabel(film({ release_date: 'n/a' }), 2026), 'Sans date');
+    t('format partagé avec le rail : vide si absente', [dayMonthShort(null), dayMonthShort(''), dayMonthShort('n/a')], ['', '', '']);
+
+    t('annonce d\'ajout', prioAnnouncement('Anora', true), '« Anora » ajouté aux prios ciné');
+    t('annonce de retrait', prioAnnouncement('Anora', false), '« Anora » retiré des prios ciné');
+    t('titre absent → phrase sans guillemets vides', prioAnnouncement(null, true), 'Film ajouté aux prios ciné');
 }
 
 console.log(`\n${pass} passé(s), ${fail} échoué(s)`);

@@ -885,7 +885,7 @@ Vercel → Settings → Environments → Production → Environment Variables
 
 GitHub → Settings → Secrets and variables → Actions
     onglet Secrets   : CRON_SECRET   même valeur que NUXT_CRON_SECRET
-    onglet Variables : SITE_URL      ex. https://cine-calendar.vercel.app
+    onglet Variables : SITE_URL      ex. https://cinegenda.alexis-chochina.fr
 ```
 
 ⚠️ **Redéployer après avoir posé les variables Vercel** : elles sont injectées dans l'environnement de

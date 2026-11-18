@@ -63,6 +63,7 @@ const GROUPS = computed(() => [
         label: 'Ma liste',
         tabs: [
             { key: 'timeline', mode: 'timeline', icon: 'list', label: 'Timeline' },
+            { key: 'lists', mode: 'lists', icon: 'bookmark', label: 'Listes' },
             { key: 'stats', mode: 'stats', icon: 'chart', label: 'Stats' },
             ...SHARED_TABS.value,
         ],

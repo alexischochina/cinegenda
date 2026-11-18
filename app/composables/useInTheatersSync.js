@@ -14,7 +14,7 @@ const CHECKABLE_STATES = ['unseen', 'inTheaters'];
 
 export function useInTheatersSync() {
     const client = useSupabaseClient();
-    const { movies, sortMovies } = useMovieCalendar();
+    const { movies, sortMovies, reconcilePrio, promoteReturnedToPrio } = useMovieCalendar();
     // ⚠️ `livePayloadFor` dans tout ce fichier : il retire des films de l'affiche sur la foi de ce
     // qu'il lit, et rien en aval ne sait se méfier d'une lecture d'hier.
     const { resolveAllocineIds, loadShowtimes, livePayloadFor, forget } = useShowtimes();
@@ -146,6 +146,9 @@ export function useInTheatersSync() {
             });
             movies.value = next;
             sortMovies(next);
+
+            await promoteReturnedToPrio(keep.filter(id => applied.has(id)));
+            await reconcilePrio();
         } finally {
             syncing.value = false;
         }
@@ -189,6 +192,8 @@ export function useInTheatersSync() {
         const next = movies.value.map(m => (gone.includes(m.id) ? { ...m, ...patch } : m));
         movies.value = next;
         sortMovies(next);
+
+        await reconcilePrio();
     };
 
     return { syncing, syncInTheaters, pruneEmptyHorizon };

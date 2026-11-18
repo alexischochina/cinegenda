@@ -6,6 +6,7 @@ export function useMovieCalendar() {
     const movies = useState('movies', () => [])
     const sortedMovies = useState('sortedMovies', () => ({}))
     const moviesWithoutDate = useState('moviesWithoutDate', () => [])
+    const prioDisabled = useState('prioDisabled', () => false)
 
     // Le regroupement est une règle pure (`app/utils/moviesGrouping.js`), partagée avec la vue d'une
     // liste partagée. Ne restent ici que les filtres du store et l'écriture des `useState`.
@@ -59,6 +60,12 @@ export function useMovieCalendar() {
         const { data, error } = await client.from('calendar').select('*').eq('user_id', userId);
         if (error) return;
 
+        // `select('*')` ne lève pas sur une colonne absente, il ne la ramène pas.
+        if (data.length) {
+            if ('prio' in data[0]) prioDisabled.value = false;
+            else disablePrio();
+        }
+
         // Filet de sécurité : lignes ajoutées pendant la transition, sans métadonnées.
         // Cas résiduel — on les résout à la volée via /full et on persiste.
         const missing = data.filter(m => !m.title);
@@ -92,6 +99,8 @@ export function useMovieCalendar() {
         const updated = await applyAutoInTheaters(withDates);
         movies.value = updated;
         sortMovies(updated);
+        // Avant `recheckUpcomingCinema`, qui réassigne `movies` depuis une copie et effacerait les transferts.
+        await reconcilePrio();
         recheckUpcomingCinema();
     }
 
@@ -175,6 +184,90 @@ export function useMovieCalendar() {
         sortMovies(movies.value);
     }
 
+    const disablePrio = () => {
+        if (prioDisabled.value) return;
+        prioDisabled.value = true;
+        console.warn('[prio ciné] Colonne `prio` absente — joue _ressources/sql/2611181315-add-prio-column.sql pour activer la liste.');
+    }
+
+    const applyListPatches = (patches) => {
+        if (!patches.size) return;
+        const next = movies.value.map(m => (patches.has(m.id) ? { ...m, ...patches.get(m.id) } : m));
+        movies.value = next;
+        sortMovies(next);
+    }
+
+    const writeListPatch = async (id, patch, what) => {
+        const { data, error } = await client.from('calendar').update(patch).eq('id', id).select('id');
+        if (error) {
+            if ('prio' in patch && isMissingSchema(error)) disablePrio();
+            else console.error(`${what} échoué pour`, id, error.message);
+            return false;
+        }
+        // RLS refuse sans lever : zéro ligne touchée, et l'écran mentirait.
+        if (!data?.length) { console.error(`${what} refusé pour`, id); return false; }
+        applyListPatches(new Map([[id, patch]]));
+        return true;
+    }
+
+    const setPrio = async (id, value) => {
+        const movie = movies.value.find(m => m.id === id);
+        if (!movie) return false;
+        if (Boolean(movie.prio) === value) return true;
+        if (prioDisabled.value) return false;
+        if (value && !canAddToPrio(movie)) return false;
+
+        const patch = value ? (returnToTheatersPatch(movie) ?? { prio: true }) : { prio: false };
+        return writeListPatch(id, patch, 'Prio ciné');
+    }
+
+    const setState = async (id, state) => {
+        const movie = movies.value.find(m => m.id === id);
+        const patch = { state, ...(movie ? prioExitPatch({ ...movie, state }) : null) };
+        return writeListPatch(id, patch, 'Changement d\'état');
+    }
+
+    const setMedia = async (id, media) => {
+        const movie = movies.value.find(m => m.id === id);
+        const patch = { media, ...(movie ? prioExitPatch({ ...movie, media }) : null) };
+        return writeListPatch(id, patch, 'Changement de média');
+    }
+
+    const writeTransfers = async (entries, what) => {
+        if (prioDisabled.value) return;
+        const pending = entries.filter(entry => entry.patch);
+        if (!pending.length) return;
+
+        const applied = new Map();
+        await promisePool(pending.map(({ id, patch }) => async () => {
+            const { data, error } = await client.from('calendar').update(patch).eq('id', id).select('id');
+            if (error) {
+                if (isMissingSchema(error)) disablePrio();
+                else console.error(`[prio ciné] ${what} échoué pour`, id, error.message);
+                return;
+            }
+            if (data?.length) applied.set(id, patch);
+        }), 8);
+        applyListPatches(applied);
+    }
+
+    const reconcilePrio = () => writeTransfers(
+        movies.value.map(movie => ({ id: movie.id, patch: prioExitPatch(movie) })),
+        'Transfert vers À rattraper',
+    )
+
+    // ⚠️ Réservée à la synchro Allociné (preuve de séances) : au chargement, « en salle » peut n'être
+    // qu'une promotion optimiste (`applyAutoInTheaters`).
+    const promoteReturnedToPrio = (ids) => {
+        const seen = new Set(ids);
+        return writeTransfers(
+            movies.value
+                .filter(movie => seen.has(movie.id))
+                .map(movie => ({ id: movie.id, patch: returnToTheatersPatch(movie) })),
+            'Ressortie en prio',
+        );
+    }
+
     // Rafraîchit les notes Letterboxd des films non vus & sortis de l'année donnée.
     // Skip les notes fraîches (< 7 j). Throttlé (8), un seul réassign de movies.value.
     const refreshLetterboxdRatings = async (year) => {
@@ -231,7 +324,7 @@ export function useMovieCalendar() {
 
     // Ajoute un film « à rattraper » : réutilise la ligne existante si présente (toggle catchup),
     // sinon insère une nouvelle ligne calendar (comme MovieAddForm) avec catchup=true.
-    // `year` = année de la vue Stats d'où part l'ajout : persistée en `catchup_year`, elle sert de
+    // `year` = année de la vue Listes d'où part l'ajout : persistée en `catchup_year`, elle sert de
     // repli d'année pour les films sans date FR résolue (voir filtre dans Catchup.vue).
     // Retourne l'entrée à intégrer localement (ou null si simple toggle d'un film déjà là).
     const addCatchupMovie = async ({ movieId, media = 'cinema', year = null }) => {
@@ -462,6 +555,11 @@ export function useMovieCalendar() {
         handleMovieDeleted,
         handleReleaseDateUpdated,
         setCatchup,
+        setPrio,
+        setState,
+        setMedia,
+        reconcilePrio,
+        promoteReturnedToPrio,
         refreshLetterboxdRatings,
         addCatchupMovie,
         addFromSharedList,

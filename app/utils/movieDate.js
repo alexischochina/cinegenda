@@ -1,3 +1,5 @@
+import { parseLocalDate } from './localDate.js'
+
 // Date de sortie exploitable d'un film, ou null si absente/invalide.
 //
 // **Source unique** du verdict « ce film est-il daté ? » : la section « Sans date » de la timeline,
@@ -12,6 +14,16 @@ export function releaseDateOf(m) {
 export function yearOfMovie(m) {
     const d = releaseDateOf(m)
     return d === null ? null : d.getFullYear()
+}
+
+const MONTHS_SHORT = ['JAN', 'FÉV', 'MAR', 'AVR', 'MAI', 'JUN', 'JUL', 'AOÛ', 'SEP', 'OCT', 'NOV', 'DÉC']
+
+export function dayMonthShort(value) {
+    if (value === null || value === undefined || value === '') return ''
+    // `YYYY-MM-DD` lu en heure locale : `new Date()` le lirait en UTC, la veille à l'ouest de Greenwich.
+    const date = value instanceof Date ? value : (parseLocalDate(value) ?? new Date(value))
+    if (isNaN(date)) return ''
+    return `${String(date.getDate()).padStart(2, '0')} ${MONTHS_SHORT[date.getMonth()]}`
 }
 
 // `Date` (ou chaîne parsable) → `YYYY-MM-DD` **en heure locale**.

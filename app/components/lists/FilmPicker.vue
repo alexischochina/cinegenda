@@ -84,7 +84,7 @@ onBeforeUnmount(() => {
 .film-picker {
     position: fixed;
     inset: 0;
-    z-index: 40;
+    z-index: 1000;
     // Ancrée en haut (pas de centrage vertical) : le champ de recherche garde une
     // position fixe quel que soit le nombre de suggestions.
     align-items: flex-start;

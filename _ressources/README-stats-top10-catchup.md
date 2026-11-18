@@ -1,5 +1,13 @@
 # Top 10 Letterboxd & liste « À rattraper » — page Statistiques
 
+> ⚠️ **Déplacés** (plan `2611181315`) : les deux sliders vivent désormais dans l'onglet **Listes**
+> (`/[year]/mes-listes`), composants `app/components/lists/TopRated.vue` et
+> `app/components/lists/Catchup.vue` (`<ListsTopRated>`, `<ListsCatchup>`). À rattraper n'a plus de
+> plafond (un seul slot « Ajouter »), écarte les films en salle, et sa popin est
+> `app/components/lists/FilmPicker.vue`. Les notes Letterboxd se rafraîchissent à l'ouverture de
+> Listes. Le reste de ce document décrit la mise en place d'origine ; la suite est dans
+> [`README-listes-prio-cine.md`](README-listes-prio-cine.md).
+
 Deux sliders ajoutés à la vue **Stats** (`/` → bascule Stats), pleine largeur, empilés,
 après les top-listes genres/pays et avant la carte du monde (ordre maquette) :
 

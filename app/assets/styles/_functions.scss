@@ -111,10 +111,11 @@
         &.-prev > :deep(svg) { transform: rotate(90deg); }
         &.-next > :deep(svg) { transform: rotate(-90deg); }
 
-        &:disabled { opacity: .3; cursor: default; }
+        // `aria-disabled` et non `disabled` : un bouton désactivé sous le focus le perd vers `<body>`.
+        &[aria-disabled="true"] { opacity: .3; cursor: default; }
 
         @media (hover: hover) {
-            &:not(:disabled):hover { border-color: $color-primary; color: $color-primary-light; }
+            &:not([aria-disabled="true"]):hover { border-color: $color-primary; color: $color-primary-light; }
         }
     }
 }

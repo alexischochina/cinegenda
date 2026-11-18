@@ -17,9 +17,6 @@ const props = defineProps({
     },
 });
 
-// Relais des events des sliders Top10 / À rattraper vers index.vue.
-const emit = defineEmits(['go-to-movie', 'toggle-catchup', 'add-catchup-movie']);
-
 const {
     total, seen, toWatch, seenRatio,
     cinema, streaming, cinemaRatio,
@@ -78,21 +75,10 @@ watch(() => props.year, () => { openStat.value = null; });
             <StatsTopList label="Top pays" kind="country" :items="topCountries" color="#4B9FD0"
                           empty-text="Aucun pays renseigné." :open-id="openStat" @toggle="toggleStat" />
 
-            <!-- 6. Top 10 Letterboxd + À rattraper — pleine largeur.
-                 ClientOnly : les sliders swiper (web-components) ne rendent pas en prerender. -->
-            <ClientOnly>
-                <StatsTopRated class="fullrow" :movies="movies" :year="year"
-                               @go-to-movie="emit('go-to-movie', $event)" />
-                <StatsCatchup class="fullrow" :movies="movies" :year="year"
-                              @go-to-movie="emit('go-to-movie', $event)"
-                              @toggle-catchup="(id, value) => emit('toggle-catchup', id, value)"
-                              @add-catchup-movie="emit('add-catchup-movie', $event)" />
-            </ClientOnly>
-
-            <!-- 7. Graphe bâtons mensuel -->
+            <!-- 6. Graphe bâtons mensuel -->
             <StatsMonthlyChart :monthly="monthly" />
 
-            <!-- 8. Carte du monde — pleine largeur, client-only (carto hors SSR/prerender) -->
+            <!-- 7. Carte du monde — pleine largeur, client-only (carto hors SSR/prerender) -->
             <ClientOnly>
                 <StatsWorldMap class="worldmap" :country-map="countryMap" :coverage="countryCoverage"
                                :max-seen="maxSeen" />
@@ -141,9 +127,8 @@ watch(() => props.year, () => { openStat.value = null; });
     grid-template-columns: repeat(4, 1fr);
     gap: 1.4rem;
 
-    // Carte du monde + sliders Top10 / À rattraper : pleine largeur.
-    > .worldmap,
-    > .fullrow { grid-column: 1 / -1; }
+    // Carte du monde : pleine largeur.
+    > .worldmap { grid-column: 1 / -1; }
 }
 
 // Carte total (hero) — les autres cartes portent leur propre chrome dans leur composant.

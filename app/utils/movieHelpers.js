@@ -1,5 +1,5 @@
 // Helpers partagés films/dates — auto-importés par Nuxt (dossier app/utils/).
-// Mutualisés entre stats/TopRated, stats/Catchup, MovieActionsBtn et useMovieCalendar.
+// Mutualisés entre lists/TopRated, lists/Catchup, MovieActionsBtn et useMovieCalendar.
 
 // Date du jour au format YYYY-MM-DD, recalculée à chaque appel (pas de gel au setup :
 // une session ouverte au passage de minuit reste juste).

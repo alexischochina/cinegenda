@@ -53,16 +53,15 @@ const onMovieExists = (event) => {
     if (movieId) goToMovie(movieId, { highlight: true })
 }
 
-// Notes Letterboxd rafraîchies au passage en Stats / changement d'année en Stats.
 watch([viewMode, selectedYear], ([mode, year]) => {
-    if (mode === 'stats' && year !== null) refreshLetterboxdRatings(year)
+    if (mode === 'lists' && year !== null) refreshLetterboxdRatings(year)
 })
 
 // Re-tri au changement de filtres. Ici (instance persistante unique) et non dans le composable
 // (appelé par plusieurs composants → doublons).
 watch(() => store.filters, () => sortMovies(movies.value), { deep: true })
 
-// Auto-dismiss de la notice catchup (timer possédé par le layout, la page stats ne fait que la poser).
+// Auto-dismiss de la notice catchup (timer possédé par le layout, la page `mes-listes` ne fait que la poser).
 let catchupNoticeTimer = null
 watch(catchupNotice, (v) => {
     if (catchupNoticeTimer) clearTimeout(catchupNoticeTimer)
@@ -84,7 +83,7 @@ onMounted(async () => {
     warmSharedLists().catch(e => console.error('Listes partagées illisibles', e))
     // Landing par défaut (année courante, timeline) → cadre sur le film du jour ; deep-link respecté.
     if (viewMode.value === 'timeline' && selectedYear.value === currentYear) onScrollToToday()
-    else if (viewMode.value === 'stats' && selectedYear.value !== null) refreshLetterboxdRatings(selectedYear.value)
+    else if (viewMode.value === 'lists' && selectedYear.value !== null) refreshLetterboxdRatings(selectedYear.value)
 
     // Contrôle « en salle » (Allociné), en tâche de fond et **sans await** : il ne doit jamais
     // retarder le premier rendu. Il ne fait quelque chose qu'une fois par semaine ciné ; les jours
@@ -221,11 +220,14 @@ onBeforeUnmount(() => {
     display: flex;
     align-items: flex-end;
     justify-content: center;
-    padding: 0 0 4rem;
+    padding: 2rem 0 9.6rem;
     background: rgba(0, 0, 0, .5);
 
     .year-sheet {
         width: 26rem;
+        max-height: 100%;
+        overflow-y: auto;
+        overscroll-behavior: contain;
         background: $color-surface-2;
         border: 1px solid $color-border-4;
         border-radius: 1.6rem;

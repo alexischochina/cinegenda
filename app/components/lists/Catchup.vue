@@ -1,9 +1,10 @@
 <script setup>
 import { refDebounced } from "@vueuse/shared";
 
-// Slider « À rattraper » : films personnellement marqués catchup pour l'année, + slots
-// « Ajouter » (dashed) jusqu'à 15. Clic carte → film dans la timeline. Clic « Ajouter » →
-// popin de recherche : suggestions dans MA liste (non vus de l'année), fallback API TMDB.
+// Slider « À rattraper » : films personnellement marqués catchup pour l'année, + un slot
+// « Ajouter » (dashed) en fin de bande, sans plafond. Clic carte → film dans la timeline. Clic
+// « Ajouter » → popin de recherche : suggestions dans MA liste (non vus de l'année, hors salles),
+// fallback API TMDB.
 const props = defineProps({
     movies: { type: Array, default: () => [] },
     year: { type: [Number, null], default: null },
@@ -22,57 +23,41 @@ const catchup = computed(() =>
         ))
         .sort((a, b) => addedAt(a) - addedAt(b) || a.id - b.id)
 );
-const MAX_CATCHUP = 15;
-const slots = computed(() => Math.max(0, MAX_CATCHUP - catchup.value.length));
+
+const heading = computed(() => props.year === null ? 'À rattraper — sans date' : `À rattraper en ${props.year}`);
 
 // Films non vus, déjà sortis, de l'année, pas déjà catchup — vivier des suggestions « liste ».
 const pool = computed(() =>
     props.movies.filter(m =>
         m.state !== 'seen' &&
+        m.state !== 'inTheaters' &&
         !m.catchup &&
         yearOf(m.release_date) === props.year &&
         m.release_date && m.release_date <= today()
     )
 );
 
+// Le repli TMDB ne doit pas réintroduire un film en salle : `addCatchupMovie` reprend la ligne
+// existante sans regarder son état.
+const inTheatersIds = computed(() => new Set(
+    props.movies.filter(m => m.state === 'inTheaters').map(m => Number(m.movie_id))
+));
+
 // ---- Popin de recherche ----
 const showPicker = ref(false);
 const query = ref('');
+const slotBtn = ref(null);
 const debouncedQuery = refDebounced(query, 300);
-const pickerInput = ref(null);
-const modalEl = ref(null);
 const tmdbMatches = ref([]);
-// Élément focalisé avant l'ouverture, pour lui rendre le focus à la fermeture (a11y).
-let lastFocused = null;
 
-const onKeydown = (e) => {
-    if (e.key === 'Escape') { closePicker(); return; }
-    // Piège le focus dans la modale : Tab depuis le dernier focusable revient au premier (et inversement).
-    if (e.key !== 'Tab' || !modalEl.value) return;
-    const focusables = modalEl.value.querySelectorAll(
-        'a[href], button:not([disabled]), input, [tabindex]:not([tabindex="-1"])'
-    );
-    if (!focusables.length) return;
-    const first = focusables[0];
-    const last = focusables[focusables.length - 1];
-    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
-    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
-};
 const openPicker = () => {
-    lastFocused = document.activeElement;
-    showPicker.value = true;
     query.value = '';
     tmdbMatches.value = [];
-    window.addEventListener('keydown', onKeydown);
-    nextTick(() => pickerInput.value?.focus());
+    showPicker.value = true;
 };
 const closePicker = () => {
     showPicker.value = false;
-    window.removeEventListener('keydown', onKeydown);
-    lastFocused?.focus?.();
-    lastFocused = null;
 };
-onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
 
 const toOption = (m) => ({
     source: 'list',
@@ -111,14 +96,17 @@ watch(debouncedQuery, async (term) => {
     if (hasLocal) return;
     try {
         const data = await $fetch(`/api/movies/search?query=${encodeURIComponent(q)}`);
-        tmdbMatches.value = (data?.results ?? []).slice(0, 5).map(r => ({
-            source: 'tmdb',
-            key: `t-${r.id}`,
-            movie_id: r.id,
-            title: r.title,
-            poster_path: r.poster_path,
-            dateShort: dateShort(r.release_date),
-        }));
+        tmdbMatches.value = (data?.results ?? [])
+            .filter(r => !inTheatersIds.value.has(Number(r.id)))
+            .slice(0, 5)
+            .map(r => ({
+                source: 'tmdb',
+                key: `t-${r.id}`,
+                movie_id: r.id,
+                title: r.title,
+                poster_path: r.poster_path,
+                dateShort: dateShort(r.release_date),
+            }));
     } catch (e) {
         console.error('Recherche TMDB fallback échouée:', e);
     }
@@ -136,80 +124,77 @@ const selectSuggestion = (o) => {
 
 const { stripEl, atStart, atEnd, nudge, updateEdges } =
     useHorizontalStrip(() => catchup.value.length);
+
+let pendingFocus = null;
+
+const remove = (movie) => {
+    pendingFocus = { id: movie.id, index: catchup.value.findIndex(m => m.id === movie.id) };
+    emit('toggle-catchup', movie.id, false);
+};
+
+watch(catchup, async (list) => {
+    if (!pendingFocus || list.some(m => m.id === pendingFocus.id)) return;
+    const { index } = pendingFocus;
+    pendingFocus = null;
+    await nextTick();
+    const cards = stripEl.value?.querySelectorAll('.cardbtn') ?? [];
+    (cards[index] ?? slotBtn.value)?.focus();
+});
 </script>
 
 <template>
-    <section class="stats-catchup card">
+    <section class="lists-catchup card">
         <div class="head flex -align-center">
-            <div class="label">À rattraper</div>
-            <div class="count">{{ catchup.length }}/{{ MAX_CATCHUP }}</div>
+            <h2 class="label">{{ heading }}</h2>
+            <p class="count">{{ catchup.length }}<span class="sr"> film{{ catchup.length > 1 ? 's' : '' }}</span></p>
             <div class="nav flex -align-center">
                 <button type="button" class="arrow -prev" aria-label="Faire défiler vers la gauche"
-                        :disabled="atStart" @click="nudge(-1)"><Svg name="chevron" /></button>
+                        :aria-disabled="atStart" @click="nudge(-1)"><Svg name="chevron" /></button>
                 <button type="button" class="arrow -next" aria-label="Faire défiler vers la droite"
-                        :disabled="atEnd" @click="nudge(1)"><Svg name="chevron" /></button>
+                        :aria-disabled="atEnd" @click="nudge(1)"><Svg name="chevron" /></button>
             </div>
         </div>
 
-        <div ref="stripEl" class="strip" @scroll.passive="updateEdges">
-            <div v-for="f in catchup" :key="f.id" class="cell">
+        <ul ref="stripEl" role="list" class="strip" @scroll.passive="updateEdges">
+            <li v-for="f in catchup" :key="f.id" class="cell">
                 <!-- Deux boutons frères (pas d'imbrication interactive) : la carte ouvre le film,
                      le bouton retrait est superposé sur l'affiche. -->
                 <div class="cardwrap">
                     <button type="button" class="cardbtn" @click="emit('go-to-movie', f.movie_id)">
-                        <div class="poster">
-                            <NuxtImg v-if="posterUrl(f.poster_path)" :src="posterUrl(f.poster_path)"
-                                     :alt="f.title ? `Affiche du film ${f.title}` : ''" class="img" loading="lazy" />
-                            <div v-else class="img -placeholder" />
-                        </div>
-                        <div class="title">{{ f.title }}</div>
+                        <span class="poster">
+                            <NuxtImg v-if="posterUrl(f.poster_path)" :src="posterUrl(f.poster_path)" alt=""
+                                     class="img" loading="lazy" />
+                            <span v-else class="img -placeholder" />
+                        </span>
+                        <span class="title">{{ f.title }}</span>
                     </button>
-                    <button type="button" class="remove" aria-label="Retirer de la liste à rattraper"
-                            @click="emit('toggle-catchup', f.id, false)"><Svg name="close" /></button>
+                    <button type="button" class="remove" :aria-label="`Retirer « ${f.title} » de la liste à rattraper`"
+                            @click="remove(f)"><Svg name="close" aria-hidden="true" /></button>
                 </div>
-            </div>
+            </li>
 
-            <div v-for="i in slots" :key="`slot-${i}`" class="cell">
+            <li class="cell">
                 <!-- Slot pleine hauteur d'une carte (réserve l'espace du titre, vide) pour que la
-                     bande ne « saute » pas ; seule la boîte du haut (format affiche) est pointillée. -->
-                <button type="button" class="slot" @click="openPicker">
+                     bande ne « saute » pas ; seule la boîte du haut (format affiche) est pointillée.
+                     Un seul, toujours en dernier : la liste n'a plus de plafond. -->
+                <button ref="slotBtn" type="button" class="slot" aria-haspopup="dialog" @click="openPicker">
                     <span class="box flex -direction-column -align-center -justify-center">
-                        <Svg name="add" class="ico" />
-                        <span class="txt">Ajouter</span>
+                        <Svg name="add" class="ico" aria-hidden="true" />
+                        <span class="txt">Ajouter<span class="sr"> un film à rattraper</span></span>
                     </span>
                 </button>
-            </div>
-        </div>
+            </li>
+        </ul>
 
-        <!-- Popin de recherche -->
-        <div v-if="showPicker" class="overlay flex -justify-center" @click="closePicker">
-            <div ref="modalEl" class="modal flex -direction-column" role="dialog" aria-modal="true" aria-label="Ajouter un film à rattraper" @click.stop>
-                <div class="mhead flex -align-center -justify-space-between">
-                    <div class="mtitle">À rattraper</div>
-                    <button type="button" class="close" aria-label="Fermer" @click="closePicker"><Svg name="close" /></button>
-                </div>
-                <input ref="pickerInput" v-model="query" type="text" class="search input-body"
-                       placeholder="Rechercher un film…" aria-label="Rechercher un film à rattraper" autocomplete="off" />
-                <div class="options">
-                    <button v-for="o in suggestions" :key="o.key" type="button"
-                            class="option flex -align-center" @click="selectSuggestion(o)">
-                        <NuxtImg v-if="posterUrl(o.poster_path)" :src="posterUrl(o.poster_path)"
-                                 :alt="o.title ? `Affiche du film ${o.title}` : ''" class="mini" loading="lazy" />
-                        <span v-else class="mini -placeholder" />
-                        <span class="meta">
-                            <span class="otitle">{{ o.title }}</span>
-                            <span class="odate">{{ o.dateShort }}</span>
-                        </span>
-                    </button>
-                    <div v-if="!suggestions.length" class="empty">Aucun résultat.</div>
-                </div>
-            </div>
-        </div>
+        <ListsFilmPicker v-if="showPicker" v-model:query="query"
+                         title="À rattraper" label="Ajouter un film à rattraper"
+                         search-label="Rechercher un film à rattraper" :options="suggestions"
+                         :return-focus="slotBtn" @select="selectSuggestion" @close="closePicker" />
     </section>
 </template>
 
 <style lang="scss" scoped>
-.stats-catchup {
+.lists-catchup {
     background: $color-surface-1;
     border: 1px solid $color-border-2;
     border-radius: 1.6rem;
@@ -222,20 +207,20 @@ const { stripEl, atStart, atEnd, nudge, updateEdges } =
         margin-bottom: 1.4rem;
 
         > .label {
-            color: $color-text-weak;
-            font: $bold 1.1rem/1 $font-body;
-            letter-spacing: .12rem;
-            text-transform: uppercase;
+            color: $color-text-quiet;
+            @include label-caps;
         }
 
         > .count {
-            color: $color-text-weak;
-            font: $normal 1.1rem/1 $font-mono;
+            color: $color-text-quiet;
+            @include mono-small;
         }
 
         > .nav {
             margin-left: auto;
             @include stripArrows();
+
+            > .arrow { @include focusRing; }
         }
     }
 
@@ -255,13 +240,14 @@ const { stripEl, atStart, atEnd, nudge, updateEdges } =
             right: .6rem;
             display: grid;
             place-items: center;
-            width: 2rem;
-            height: 2rem;
+            width: 2.4rem;
+            height: 2.4rem;
             border-radius: 50%;
             background: rgba(0, 0, 0, .65);
             color: $color-primary-lighter;
             cursor: pointer;
             transition: opacity .18s ease;
+            @include focusRing;
 
             > :deep(svg) { width: 1.2rem; height: 1.2rem; }
         }
@@ -286,9 +272,12 @@ const { stripEl, atStart, atEnd, nudge, updateEdges } =
         width: 100%;
         text-align: left;
         cursor: pointer;
+        border-radius: 1rem;
+        @include focusRing($offset: -2px);
     }
 
     .poster {
+        display: block;
         width: 9.6rem;
         height: 14.4rem;
         border-radius: 1rem;
@@ -296,6 +285,7 @@ const { stripEl, atStart, atEnd, nudge, updateEdges } =
         background: $color-surface-4;
 
         > .img {
+            display: block;
             width: 100%;
             height: 100%;
             object-fit: cover;
@@ -311,14 +301,16 @@ const { stripEl, atStart, atEnd, nudge, updateEdges } =
         // on ajoute le premier film dans une liste vide.
         height: 2.875rem;
         color: $color-text-dim;
-        font: $semi-bold 1.15rem/1.25 $font-body;
         display: -webkit-box;
         -webkit-line-clamp: 2;
         -webkit-box-orient: vertical;
         overflow: hidden;
+        @include card-title;
     }
 
+    // `relative` : borne le texte `.sr` (absolu), qui sinon s'échappe de la bande et étire la page.
     .slot {
+        position: relative;
         display: flex;
         flex-direction: column;
         align-items: flex-start;
@@ -327,6 +319,8 @@ const { stripEl, atStart, atEnd, nudge, updateEdges } =
         // hauteur totale d'une carte pour que la bande ne saute pas ; l'espace titre reste vide.
         height: 17.875rem;
         cursor: pointer;
+        border-radius: 1rem;
+        @include focusRing($offset: -2px);
 
         > .box {
             gap: .6rem;
@@ -334,11 +328,11 @@ const { stripEl, atStart, atEnd, nudge, updateEdges } =
             height: 14.4rem;
             border: 1px dashed $color-border-5;
             border-radius: 1rem;
-            color: $color-text-weak;
+            color: $color-text-quiet;
             transition: border-color .18s ease, color .18s ease;
 
             > .ico { width: 1.8rem; height: 1.8rem; }
-            > .txt { font: $medium 1.2rem/1 $font-body; }
+            > .txt { @include small-label; }
         }
 
         @media (hover: hover) {
@@ -347,112 +341,5 @@ const { stripEl, atStart, atEnd, nudge, updateEdges } =
     }
 }
 
-// ---- Popin ----
-.overlay {
-    position: fixed;
-    inset: 0;
-    z-index: 40;
-    // Ancrée en haut (pas de centrage vertical) : le champ de recherche garde une
-    // position fixe quel que soit le nombre de suggestions.
-    align-items: flex-start;
-    padding: 8vh 2rem 2rem;
-    background: rgba(0, 0, 0, .6);
-}
-
-.modal {
-    width: 42rem;
-    max-width: 100%;
-    max-height: calc(92vh - 2rem);
-    padding: 2rem;
-    background: $color-surface-1;
-    border: 1px solid $color-border-4;
-    border-radius: 2rem;
-    box-shadow: 0 30px 70px rgba(0, 0, 0, .6);
-    animation: catchup-pop .18s ease;
-
-    > .mhead {
-        margin-bottom: 1.4rem;
-
-        > .mtitle { color: $color-text; font: 800 1.8rem/1 $font-title; }
-
-        > .close {
-            display: grid;
-            place-items: center;
-            color: $color-text-muted;
-            cursor: pointer;
-
-            > :deep(svg) { width: 2rem; height: 2rem; }
-        }
-    }
-
-    > .search {
-        width: 100%;
-        padding: 1rem 1.2rem;
-        background: $color-surface-4;
-        border: 1px solid $color-border-3;
-        border-radius: 1.2rem;
-        color: $color-text-body;
-        margin-bottom: 1.2rem;
-    }
-
-    > .options {
-        min-height: 0;
-        overflow-y: auto;
-        overscroll-behavior: contain;
-
-        > .option {
-            gap: 1.1rem;
-            width: 100%;
-            padding: .7rem .9rem;
-            border-radius: 1.1rem;
-            text-align: left;
-            cursor: pointer;
-            transition: background .18s ease;
-
-            > .mini {
-                width: 3.2rem;
-                height: 4.8rem;
-                flex: none;
-                border-radius: .5rem;
-                object-fit: cover;
-
-                &.-placeholder { background: $color-surface-4; }
-            }
-
-            > .meta {
-                flex: 1;
-                min-width: 0;
-                display: flex;
-                flex-direction: column;
-                gap: .2rem;
-
-                > .otitle {
-                    color: $color-text-body;
-                    font: $semi-bold 1.35rem/1.2 $font-body;
-                    white-space: nowrap;
-                    overflow: hidden;
-                    text-overflow: ellipsis;
-                }
-
-                > .odate { color: $color-text-weaker; font: $normal 1.05rem/1 $font-mono; }
-            }
-
-            @media (hover: hover) {
-                &:hover { background: rgba(255, 255, 255, .04); }
-            }
-        }
-
-        > .empty {
-            padding: 2rem 0;
-            text-align: center;
-            color: $color-text-weak;
-            font: $normal 1.3rem/1 $font-body;
-        }
-    }
-}
-
-@keyframes catchup-pop {
-    from { transform: scale(.96); opacity: 0; }
-    to { transform: scale(1); opacity: 1; }
-}
+.sr { @include srOnly; }
 </style>

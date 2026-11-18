@@ -17,7 +17,7 @@ defineProps({
     emptyMessage: { type: String, default: 'Aucun film ne correspond.' },
 });
 
-const emit = defineEmits(['movie-deleted', 'release-date-updated', 'toggle-catchup', 'add-to-list']);
+const emit = defineEmits(['movie-deleted', 'release-date-updated', 'toggle-catchup', 'toggle-prio', 'state-changed', 'media-changed', 'add-to-list']);
 
 const monthCount = (days) => {
     const n = Object.values(days).reduce((acc, list) => acc + list.length, 0);
@@ -59,11 +59,15 @@ const monthCount = (days) => {
                                            :letterboxd-directors="movie.letterboxd_directors"
                                            :release-date="movie.release_date"
                                            :catchup="movie.catchup"
+                                           :prio="movie.prio"
                                            :shared="shared"
                                            :already-mine="ownedIds.has(Number(movie.movie_id))"
                                            @movie-deleted="emit('movie-deleted', $event)"
                                            @release-date-updated="emit('release-date-updated', $event)"
                                            @toggle-catchup="(id, value) => emit('toggle-catchup', id, value)"
+                                           @toggle-prio="(id, value) => emit('toggle-prio', id, value)"
+                                           @state-changed="(id, value, done) => emit('state-changed', id, value, done)"
+                                           @media-changed="(id, value, done) => emit('media-changed', id, value, done)"
                                            @add-to-list="emit('add-to-list', movie)" />
                         </template>
                     </div>
@@ -84,11 +88,15 @@ const monthCount = (days) => {
                                    :letterboxd-directors="movie.letterboxd_directors"
                                    :release-date="movie.release_date"
                                    :catchup="movie.catchup"
+                                   :prio="movie.prio"
                                    :shared="shared"
                                    :already-mine="ownedIds.has(Number(movie.movie_id))"
                                    @movie-deleted="emit('movie-deleted', $event)"
                                    @release-date-updated="emit('release-date-updated', $event)"
                                    @toggle-catchup="(id, value) => emit('toggle-catchup', id, value)"
+                                   @toggle-prio="(id, value) => emit('toggle-prio', id, value)"
+                                   @state-changed="(id, value, done) => emit('state-changed', id, value, done)"
+                                   @media-changed="(id, value, done) => emit('media-changed', id, value, done)"
                                    @add-to-list="emit('add-to-list', movie)" />
                 </div>
             </template>

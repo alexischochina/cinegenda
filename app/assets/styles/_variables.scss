@@ -16,6 +16,7 @@ $color-green: #2FBF71;         // vu au ciné
 // 3e cran de la jauge de robustesse (pages auth) — $color-green y est le 4e.
 $color-green-light: #9BD36A;
 $color-yellow: #F0A935;        // vu en streaming (ambre)
+$color-prio: #FFC940;
 $color-status-grey: #3A3F4A;   // à venir / téléchargeable (bord seul)
 // Violet — séances événement (avant-première, séance unique, labels de programmation). Une famille à
 // part et pas une nuance de rose : l'événement n'est pas un degré de « en salle », c'est une autre
@@ -103,6 +104,7 @@ $tablet: "(max-width:#{$breakpoint-tablet}px)";
 $tablet-portrait: "(max-width:#{$breakpoint-tablet-portrait}px)";
 $nomobile : "(min-width:#{$breakpoint-mobile+1}px)";
 $mobile: "(max-width:#{$breakpoint-mobile}px)";
+$shell-compact: "(max-width: 999px)";
 
 //#start wrappers
 $wrappers: (//rem

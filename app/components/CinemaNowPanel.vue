@@ -47,13 +47,7 @@ const { goToEvents } = useCalendarNav();
 // repartirait à « ouvert » au retour.
 const open = useState('cinemaNowBandOpen', () => true);
 
-const MSHORT = ['JAN', 'FÉV', 'MAR', 'AVR', 'MAI', 'JUN', 'JUL', 'AOÛ', 'SEP', 'OCT', 'NOV', 'DÉC'];
-
-const dateShort = (dateStr) => {
-    const d = dateStr ? new Date(dateStr) : null;
-    if (!d || isNaN(d)) return 'Sans date';
-    return `${String(d.getDate()).padStart(2, '0')} ${MSHORT[d.getMonth()]}`;
-};
+const dateShort = (dateStr) => dayMonthShort(dateStr) || 'Sans date';
 
 // « auj. », « demain », puis « lun. 17 août ». Les deux premiers portent l'urgence bien mieux qu'une
 // date à décoder — c'est l'information qui décide si on y va ce soir.
@@ -79,7 +73,8 @@ const posterUrl = (path) => path ? `https://image.tmdb.org/t/p/w342${path}` : nu
 // D'où les autres dates, que seul le badge résume désormais — et ni le type ni la salle, que la carte
 // n'affiche plus : les annoncer décrirait une carte qui n'existe pas.
 const itemLabel = (movie, event, others) => {
-    const base = movie.title ? `Voir les séances de ${movie.title}` : 'Voir les séances';
+    const prio = movie.prio ? ', en prio ciné' : '';
+    const base = movie.title ? `Voir les séances de ${movie.title}${prio}` : `Voir les séances${prio}`;
     if (!event) return base;
 
     return `${base} — ${eventDayLabel(event.date)}`
@@ -200,7 +195,7 @@ const BAND_LIST_ID = 'cinema-now-band-list';
                         <Svg name="star" />{{ row.days }}
                     </span>
                     <span class="infos">
-                        <span class="title">{{ row.movie.title }}</span>
+                        <span class="title"><PrioStar v-if="row.movie.prio" class="prio" />{{ row.movie.title }}</span>
                         <!-- Le jour pour un événement : c'est lui qui décide s'il faut y aller ce soir.
                              La date de sortie sinon, plus discrète. -->
                         <span :class="row.event ? 'when' : 'date'">{{ row.when }}</span>
@@ -317,6 +312,11 @@ const BAND_LIST_ID = 'cinema-now-band-list';
             display: block;
             color: $color-text;
             font: $semi-bold 1.3rem/1.2 $font-body;
+
+            > .prio {
+                margin-right: .8rem;
+                vertical-align: -.1rem;
+            }
         }
 
         .date {

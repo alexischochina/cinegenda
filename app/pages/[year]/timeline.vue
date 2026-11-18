@@ -4,8 +4,15 @@
 definePageMeta({ key: 'timeline', middleware: ['auth', 'valid-year'] })
 useHead({ title: 'Mon calendrier' })
 
-const { sortedMovies, moviesWithoutDate, cinemaNow, eventSoon, handleMovieDeleted, handleReleaseDateUpdated, setCatchup } = useMovieCalendar()
+const {
+    sortedMovies, moviesWithoutDate, cinemaNow, eventSoon,
+    handleMovieDeleted, handleReleaseDateUpdated, setCatchup, setState, setMedia,
+} = useMovieCalendar()
 const { selectedYear, goToSeances } = useCalendarNav()
+const { togglePrio } = usePrioToggle()
+
+const onStateChanged = async (id, state, done) => done?.(await setState(id, state))
+const onMediaChanged = async (id, media, done) => done?.(await setMedia(id, media))
 
 // null = section « Sans date ».
 const monthsOfYear = computed(() =>
@@ -27,7 +34,8 @@ const hasContent = computed(() =>
         <TimelineList :selected-year="selectedYear" :months-of-year="monthsOfYear"
                       :movies-without-date="moviesWithoutDate" :has-content="hasContent"
                       @movie-deleted="handleMovieDeleted" @release-date-updated="handleReleaseDateUpdated"
-                      @toggle-catchup="setCatchup" />
+                      @toggle-catchup="setCatchup" @toggle-prio="togglePrio"
+                      @state-changed="onStateChanged" @media-changed="onMediaChanged" />
     </div>
 </template>
 

@@ -1,5 +1,5 @@
 <script setup>
-const emits = defineEmits(['movie-deleted', 'release-date-updated', 'toggle-catchup', 'add-to-list']);
+const emits = defineEmits(['movie-deleted', 'release-date-updated', 'toggle-catchup', 'toggle-prio', 'state-changed', 'media-changed', 'add-to-list']);
 
 const props = defineProps({
     releaseDay: {
@@ -52,6 +52,10 @@ const props = defineProps({
         type: Boolean,
         default: false,
     },
+    prio: {
+        type: Boolean,
+        default: false,
+    },
     // Ligne appartenant à un **autre compte** : lecture seule complète. ⚠️ Pas de la cosmétique — un
     // `update` sur sa ligne toucherait **zéro ligne sans lever**, donc un sélecteur laissé actif
     // changerait d'état à l'écran, rien en base, et personne ne le dirait.
@@ -67,30 +71,37 @@ const props = defineProps({
 })
 const selectedMedia = ref(props.media);
 const selectedState = ref(props.state);
-const client = useSupabaseClient();
 
 // L'état est aussi écrit **de l'extérieur** : `useInTheatersSync` fait entrer et sortir les films de
 // « En salle » en tâche de fond. La ligne n'est pas remontée pour autant (`:key="movie.id"` dans
 // TimelineList), donc sans ce report la pastille et le liseré resteraient sur l'ancienne valeur
 // jusqu'au prochain rechargement complet.
 watch(() => props.state, (state) => { selectedState.value = state });
+watch(() => props.media, (media) => { selectedMedia.value = media });
+
+const root = ref(null);
+const starBtn = ref(null);
+let starHadFocus = false;
+
+const onStarClick = () => {
+    starHadFocus = document.activeElement === starBtn.value;
+    emits('toggle-prio', props.id, false);
+};
+
+watch(() => props.prio, (prio) => {
+    if (prio || !starHadFocus) return;
+    starHadFocus = false;
+    nextTick(() => root.value?.querySelector('.actions-btn')?.focus());
+});
 
 const onMediaSelected = (option) => {
     selectedMedia.value = option;
-    updateMedia(option)
+    emits('media-changed', props.id, option, (ok) => { if (!ok) selectedMedia.value = props.media });
 }
 
 const onStateSelected = (option) => {
     selectedState.value = option;
-    updateState(option);
-}
-
-const updateMedia = async (newMedia) => {
-    await client.from('calendar').update({ media: newMedia }).eq('id', props.id)
-}
-
-const updateState = async (newState) => {
-    await client.from('calendar').update({ state: newState }).eq('id', props.id)
+    emits('state-changed', props.id, option, (ok) => { if (!ok) selectedState.value = props.state });
 }
 
 // Sous-titre de droite : réalisateur si connu, sinon libellé état/média.
@@ -125,7 +136,7 @@ const subFallback = computed(() => {
 <template>
     <!-- `.self` : `animationend` remonte, et `MovieActionsBtn` anime son popover à l'intérieur de la
          ligne — sans le modificateur, ouvrir le menu ⋯ couperait le clignotement. -->
-    <div class="movie-list-item"
+    <div ref="root" class="movie-list-item"
          :class="[`-${selectedMedia}`, `-state-${selectedState}`, anchorClass, { '-flash': isFlashing }]"
          @animationend.self="clearMovieFlash(props.movieId)">
         <div class="day">{{ props.releaseDay }}</div>
@@ -134,6 +145,9 @@ const subFallback = computed(() => {
         <div v-else class="poster -placeholder" />
         <div class="info">
             <div class="title-row">
+                <button v-if="props.prio && !props.shared" ref="starBtn" type="button" class="star"
+                        :aria-label="`Retirer « ${props.title} » des prios`" title="Retirer des prios"
+                        @click="onStarClick"><PrioStar class="ico" /></button>
                 <a :href="`https://letterboxd.com/tmdb/${props.movieId}/`" target="_blank" rel="noopener" class="title">{{ props.title }}</a>
                 <span v-if="isInTheaters" class="badge">En salle</span>
             </div>
@@ -162,9 +176,11 @@ const subFallback = computed(() => {
             <SelectBtn type="state" :selected="selectedState" @option-selected="onStateSelected" />
             <MovieActionsBtn :id="props.id" :manual-release-date="manualReleaseDate"
                              :release-date="props.releaseDate" :catchup="props.catchup"
+                             :state="selectedState" :media="selectedMedia" :prio="props.prio"
                              @movie-deleted="emits('movie-deleted', $event)"
                              @release-date-updated="emits('release-date-updated', $event)"
-                             @toggle-catchup="(id, value) => emits('toggle-catchup', id, value)" />
+                             @toggle-catchup="(id, value) => emits('toggle-catchup', id, value)"
+                             @toggle-prio="(id, value) => emits('toggle-prio', id, value)" />
         </template>
     </div>
 </template>
@@ -242,6 +258,28 @@ const subFallback = computed(() => {
         display: flex;
         align-items: center;
         gap: .8rem;
+
+        > .star {
+            display: grid;
+            place-items: center;
+            flex: none;
+            width: 2.4rem;
+            height: 2.4rem;
+            margin: -.55rem;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: background-color .15s linear;
+            @include focusRing;
+
+            > .ico {
+                width: 1.3rem;
+                height: 1.3rem;
+            }
+
+            @media (hover: hover) {
+                &:hover { background-color: rgba($color-prio, .14); }
+            }
+        }
     }
 
     .badge {
